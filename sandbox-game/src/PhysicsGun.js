@@ -26,11 +26,23 @@ export class PhysicsGun {
         this.rotateSpeed = 0.05;
         this.targetRotation = new THREE.Quaternion();
 
+        // Grabbed point relative to the object's origin
+        this.anchorOnBody = { x: 0, y: 0, z: 0 };
+
+        // Visual beam line
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00aaff, linewidth: 2 });
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        this.beamLine = new THREE.Line(lineGeometry, lineMaterial);
+        this.beamLine.visible = false;
+        this.scene.add(this.beamLine);
+
+        this.enabled = true;
         this.initEventListeners();
     }
 
     initEventListeners() {
         document.addEventListener('wheel', (event) => {
+            if (!this.enabled) return;
             if (this.grabbedObject) {
                 // Adjust grab distance based on scroll wheel
                 const scrollDir = Math.sign(event.deltaY);
@@ -40,8 +52,22 @@ export class PhysicsGun {
         });
 
         document.addEventListener('keydown', (event) => {
-            if (event.code === 'KeyE' && this.grabbedObject) {
+            if (event.code === 'KeyE' && this.grabbedObject && !this.isRotating) {
                 this.isRotating = true;
+
+                // Switch to FixedJoint for rigid rotation
+                if (this.joint) this.world.removeImpulseJoint(this.joint, true);
+
+                const currentRot = this.grabbedObject.body.rotation();
+                this.targetRotation.set(currentRot.x, currentRot.y, currentRot.z, currentRot.w);
+                this.kinematicBody.setRotation(this.targetRotation, true);
+
+                const jointData = RAPIER.JointData.fixed(
+                    { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 },
+                    this.anchorOnBody, { x: 0, y: 0, z: 0, w: 1 }
+                );
+                this.joint = this.world.createImpulseJoint(jointData, this.kinematicBody, this.grabbedObject.body, true);
+                this.grabbedObject.body.wakeUp();
             }
             if (this.isRotating) {
                 const rotAxis = new THREE.Vector3();
@@ -58,12 +84,22 @@ export class PhysicsGun {
         });
 
         document.addEventListener('keyup', (event) => {
-            if (event.code === 'KeyE') {
+            if (event.code === 'KeyE' && this.grabbedObject && this.isRotating) {
+                this.isRotating = false;
+
+                // Switch back to SphericalJoint
+                if (this.joint) this.world.removeImpulseJoint(this.joint, true);
+
+                const jointData = RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, this.anchorOnBody);
+                this.joint = this.world.createImpulseJoint(jointData, this.kinematicBody, this.grabbedObject.body, true);
+                this.grabbedObject.body.wakeUp();
+            } else if (event.code === 'KeyE') {
                 this.isRotating = false;
             }
         });
 
         document.addEventListener('mousedown', (event) => {
+            if (!this.enabled) return;
             if (event.button === 0 && document.pointerLockElement) {
                 this.tryGrab();
             }
@@ -101,23 +137,24 @@ export class PhysicsGun {
 
                 // Anchor point relative to the center of the grabbed body
                 const objPos = hitObject.body.translation();
-                const anchorOnBody = {
-                    x: grabPoint.x - objPos.x,
-                    y: grabPoint.y - objPos.y,
-                    z: grabPoint.z - objPos.z
-                };
 
-                // Store initial rotation of the grabbed object
-                const initialRot = hitObject.body.rotation();
-                this.targetRotation.set(initialRot.x, initialRot.y, initialRot.z, initialRot.w);
-                this.kinematicBody.setRotation(this.targetRotation, true);
+                // Keep the anchor in the object's local space if the object is rotated
+                // For simplicity we just take world diff and assume center is good enough for now
+                // Actually, a more precise local anchor requires inverse quaternion.
+                const rotQ = hitObject.body.rotation();
+                const inverseRot = new THREE.Quaternion(rotQ.x, rotQ.y, rotQ.z, rotQ.w).invert();
 
-                // Use FixedJoint so we can control rotation directly
-                const jointData = RAPIER.JointData.fixed(
-                    { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 },
-                    anchorOnBody, { x: 0, y: 0, z: 0, w: 1 }
-                );
+                const diff = new THREE.Vector3(grabPoint.x - objPos.x, grabPoint.y - objPos.y, grabPoint.z - objPos.z);
+                diff.applyQuaternion(inverseRot);
+
+                this.anchorOnBody = { x: diff.x, y: diff.y, z: diff.z };
+
+                // Initially use SphericalJoint (dangles freely)
+                const jointData = RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, this.anchorOnBody);
                 this.joint = this.world.createImpulseJoint(jointData, this.kinematicBody, hitObject.body, true);
+
+                this.isRotating = false;
+                this.beamLine.visible = true;
 
                 hitObject.body.wakeUp();
             }
@@ -125,6 +162,7 @@ export class PhysicsGun {
     }
 
     releaseGrab() {
+        this.beamLine.visible = false;
         if (this.joint) {
             this.world.removeImpulseJoint(this.joint, true);
             this.joint = null;
@@ -139,7 +177,7 @@ export class PhysicsGun {
         }
     }
 
-    update() {
+    update(delta) {
         if (this.grabbedObject && this.joint) {
             const dir = new THREE.Vector3();
             this.camera.getWorldDirection(dir);
@@ -147,17 +185,38 @@ export class PhysicsGun {
 
             const currentPos = this.kinematicBody.translation();
 
-            // Add slight lerp for smooth dragging
+            // Use time-scaled interpolation (PID-like smooth damping)
+            const smoothing = 1.0 - Math.pow(0.001, delta); // Frame-rate independent lerp
             const smoothedPos = {
-                x: currentPos.x + (targetPos.x - currentPos.x) * 0.5,
-                y: currentPos.y + (targetPos.y - currentPos.y) * 0.5,
-                z: currentPos.z + (targetPos.z - currentPos.z) * 0.5,
+                x: currentPos.x + (targetPos.x - currentPos.x) * smoothing * 10,
+                y: currentPos.y + (targetPos.y - currentPos.y) * smoothing * 10,
+                z: currentPos.z + (targetPos.z - currentPos.z) * smoothing * 10,
             };
 
             this.kinematicBody.setTranslation(smoothedPos, true);
 
-            // Apply rotation (slerp would be better, but instant set works for rigid grab)
-            this.kinematicBody.setRotation(this.targetRotation, true);
+            if (this.isRotating) {
+                // Apply rotation only if E is held (fixed joint active)
+                this.kinematicBody.setRotation(this.targetRotation, true);
+            }
+
+            // Update visual beam line
+            // Start beam slightly right and below center of camera
+            const startPos = this.camera.position.clone();
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+            const down = new THREE.Vector3(0, -1, 0).applyQuaternion(this.camera.quaternion);
+            startPos.add(right.multiplyScalar(0.3)).add(down.multiplyScalar(0.2));
+
+            // End beam at the anchor point on the grabbed object
+            const objPos = this.grabbedObject.body.translation();
+            const rotQ = this.grabbedObject.body.rotation();
+            const objRot = new THREE.Quaternion(rotQ.x, rotQ.y, rotQ.z, rotQ.w);
+            const worldAnchor = new THREE.Vector3(this.anchorOnBody.x, this.anchorOnBody.y, this.anchorOnBody.z).applyQuaternion(objRot).add(objPos);
+
+            const positions = this.beamLine.geometry.attributes.position.array;
+            positions[0] = startPos.x; positions[1] = startPos.y; positions[2] = startPos.z;
+            positions[3] = worldAnchor.x; positions[4] = worldAnchor.y; positions[5] = worldAnchor.z;
+            this.beamLine.geometry.attributes.position.needsUpdate = true;
 
             this.grabbedObject.body.wakeUp();
         }

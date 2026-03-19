@@ -1,112 +1,88 @@
 import './style.css';
 import * as THREE from 'three';
-import { PlayerController } from './PlayerController.js';
-import { PhysicsGun } from './PhysicsGun.js';
-import { Ragdoll } from './Ragdoll.js';
 import * as RAPIER from '@dimforge/rapier3d';
 
-// Wrap everything in an async init function because RAPIER uses wasm
+import { setupScene } from './SceneSetup.js';
+import { createCheckerboardTexture, createCrateTexture } from './Textures.js';
+import { WorldBuilder } from './WorldBuilder.js';
+
+import { PlayerController } from './PlayerController.js';
+import { PhysicsGun } from './PhysicsGun.js';
+import { WeldTool } from './WeldTool.js';
+import { ThrusterTool } from './ThrusterTool.js';
+import { Ragdoll } from './Ragdoll.js';
+import { Vehicle } from './Vehicle.js';
+
 async function init() {
-    // When using vite-plugin-wasm + topLevelAwait, rapier is often initialized differently
-    // Actually @dimforge/rapier3d may not need init() or might be different version
     if (typeof RAPIER.init === 'function') {
         await RAPIER.init();
     }
 
+    const { scene, camera, renderer, composer, directionalLight } = setupScene();
+
+    // Physics World setup
     const world = new RAPIER.World({ x: 0.0, y: -9.81, z: 0.0 });
-    const dynamicObjects = []; // Array to link THREE objects and RAPIER bodies
+    const dynamicObjects = []; // Link THREE objects and RAPIER bodies
 
-// Setup Scene, Camera, Renderer
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // Sky blue
-scene.fog = new THREE.Fog(0x87ceeb, 0, 100);
+    // Textures & Environment
+    const textures = {
+        ground: createCheckerboardTexture(),
+        crate: createCrateTexture()
+    };
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 2, 5);
+    const worldBuilder = new WorldBuilder(scene, world, dynamicObjects);
+    worldBuilder.buildEnvironment(textures);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-
-// Lighting
-const ambientLight = new THREE.AmbientLight(0x404040, 1.5); // Soft white light
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-directionalLight.position.set(10, 20, 10);
-directionalLight.castShadow = true;
-directionalLight.shadow.mapSize.width = 2048;
-directionalLight.shadow.mapSize.height = 2048;
-directionalLight.shadow.camera.near = 0.5;
-directionalLight.shadow.camera.far = 50;
-directionalLight.shadow.camera.left = -20;
-directionalLight.shadow.camera.right = 20;
-directionalLight.shadow.camera.top = 20;
-directionalLight.shadow.camera.bottom = -20;
-scene.add(directionalLight);
-
-// Ground
-const groundGeometry = new THREE.PlaneGeometry(500, 500); // Expanded map
-// We add a basic grid texture to give scale to the map
-const gridTexture = new THREE.GridHelper(500, 100, 0x000000, 0x000000);
-gridTexture.position.y = 0.01; // slightly above ground to prevent z-fighting
-gridTexture.material.opacity = 0.2;
-gridTexture.material.transparent = true;
-scene.add(gridTexture);
-
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x5a7a5a, roughness: 0.9, metalness: 0.1 }); // grass-ish color
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// Ground Physics
-const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0);
-const groundBody = world.createRigidBody(groundBodyDesc);
-const groundColliderDesc = RAPIER.ColliderDesc.cuboid(250, 0.1, 250); // Match expanded size
-world.createCollider(groundColliderDesc, groundBody);
-
-// Buildings (Static environment)
-function createBuilding(w, h, d, x, y, z, color) {
-    const geometry = new THREE.BoxGeometry(w, h, d);
-    const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-
-    const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z);
-    const body = world.createRigidBody(bodyDesc);
-    const colliderDesc = RAPIER.ColliderDesc.cuboid(w/2, h/2, d/2);
-    world.createCollider(colliderDesc, body);
-}
-
-// Add some walls / simple buildings around the starting area
-createBuilding(20, 10, 2, 0, 5, -20, 0x888888); // back wall
-createBuilding(2, 10, 20, -10, 5, -10, 0x888888); // left wall
-createBuilding(10, 5, 10, 15, 2.5, -15, 0xaa5555); // red building block
-createBuilding(5, 15, 5, -20, 7.5, 10, 0x5555aa); // blue tower
-
-// Player Physics
-const playerBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 2, 5); // Start as kinematic, can change to dynamic later
-// Actually, let's make it a dynamic character
-const playerDynamicDesc = RAPIER.RigidBodyDesc.dynamic()
-    .setTranslation(0, 2, 5)
-    .lockRotations(); // Prevent player from tipping over
-const playerBody = world.createRigidBody(playerDynamicDesc);
+// Player Physics (Using Character Controller)
+const playerBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 5, 5);
+const playerBody = world.createRigidBody(playerBodyDesc);
 const playerColliderDesc = RAPIER.ColliderDesc.capsule(0.5, 0.4); // half-height, radius
-world.createCollider(playerColliderDesc, playerBody);
+const playerCollider = world.createCollider(playerColliderDesc, playerBody);
+
+const characterController = world.createCharacterController(0.01);
+characterController.enableAutostep(0.3, 0.3, true); // height, minWidth, includeDynamic
+characterController.enableSnapToGround(0.3);
 
 
 // Player Controller
 const playerController = new PlayerController(camera, renderer.domElement);
-playerController.setPhysicsBody(playerBody, world);
+playerController.setPhysicsBody(playerBody, playerCollider, characterController, world);
 
-// Physics Gun
+// Tools
 const physicsGun = new PhysicsGun(camera, scene, world, dynamicObjects);
+const weldTool = new WeldTool(camera, scene, world, dynamicObjects);
+const thrusterTool = new ThrusterTool(camera, scene, world, dynamicObjects);
+
+let currentTool = 'physgun';
+physicsGun.enabled = true;
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Digit1') {
+        currentTool = 'physgun';
+        physicsGun.enabled = true;
+        weldTool.enabled = false;
+        weldTool.reset();
+        thrusterTool.enabled = false;
+        console.log("Tool: Physics Gun");
+    }
+    if (e.code === 'Digit2') {
+        currentTool = 'weld';
+        physicsGun.enabled = false;
+        physicsGun.releaseGrab();
+        weldTool.enabled = true;
+        thrusterTool.enabled = false;
+        console.log("Tool: Weld");
+    }
+    if (e.code === 'Digit3') {
+        currentTool = 'thruster';
+        physicsGun.enabled = false;
+        physicsGun.releaseGrab();
+        weldTool.enabled = false;
+        weldTool.reset();
+        thrusterTool.enabled = true;
+        console.log("Tool: Thruster");
+    }
+});
 
 // Helper to get spawn position in front of camera
 function getSpawnPosition(distance = 4) {
@@ -125,11 +101,10 @@ function getSpawnPosition(distance = 4) {
 // Q-Menu Spawn Logic
 document.getElementById('spawn-cube').addEventListener('click', () => {
     const size = 0.5 + Math.random() * 1;
-    const color = Math.random() * 0xffffff;
 
     const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(size * 2, size * 2, size * 2),
-        new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
+        new THREE.MeshStandardMaterial({ map: textures.crate, roughness: 0.8 })
     );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -172,6 +147,56 @@ document.getElementById('spawn-sphere').addEventListener('click', () => {
     dynamicObjects.push({ mesh, body });
 });
 
+document.getElementById('spawn-cylinder').addEventListener('click', () => {
+    const radius = 0.5 + Math.random() * 0.5;
+    const height = 1.0 + Math.random() * 1.0;
+    const color = Math.random() * 0xffffff;
+
+    const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 32),
+        new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const spawnPos = getSpawnPosition();
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
+        .setCcdEnabled(true);
+
+    const body = world.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cylinder(height / 2, radius).setMass(radius * height * 10);
+    world.createCollider(colliderDesc, body);
+
+    dynamicObjects.push({ mesh, body });
+});
+
+document.getElementById('spawn-cone').addEventListener('click', () => {
+    const radius = 0.5 + Math.random() * 0.5;
+    const height = 1.0 + Math.random() * 1.0;
+    const color = Math.random() * 0xffffff;
+
+    const mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(radius, height, 32),
+        new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const spawnPos = getSpawnPosition();
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
+        .setCcdEnabled(true);
+
+    const body = world.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cone(height / 2, radius).setMass(radius * height * 5);
+    world.createCollider(colliderDesc, body);
+
+    dynamicObjects.push({ mesh, body });
+});
+
 document.getElementById('spawn-ragdoll').addEventListener('click', () => {
     const spawnPos = getSpawnPosition(5);
     spawnPos.y += 2; // Spawn high up to see it fall
@@ -182,12 +207,32 @@ document.getElementById('spawn-ragdoll').addEventListener('click', () => {
     });
 });
 
-// Resize handler
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('spawn-car').addEventListener('click', () => {
+    const spawnPos = getSpawnPosition(6);
+    spawnPos.y += 1;
+
+    const vehicle = new Vehicle(scene, world, spawnPos);
+    vehicle.bodies.forEach(b => {
+        dynamicObjects.push(b);
+    });
+    console.log("Spawned Car. Use I and K to drive rear wheels.");
 });
+
+// UI Tab Logic
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+
+        btn.classList.add('active');
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
+});
+
+// Resize handled in SceneSetup
 
 // Animation Loop
 const clock = new THREE.Clock();
@@ -210,9 +255,11 @@ function animate() {
     });
 
     playerController.update(delta);
-    physicsGun.update();
+    physicsGun.update(delta);
+    thrusterTool.update();
 
-    renderer.render(scene, camera);
+    // Use composer instead of renderer for post-processing
+    composer.render();
 }
 
 animate();

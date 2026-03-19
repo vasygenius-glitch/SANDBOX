@@ -9,13 +9,35 @@
     <div id="q-menu" class="hidden">
       <div class="menu-container">
         <h2>Spawn Menu</h2>
-        <div class="grid">
-          <button id="spawn-cube" class="spawn-btn">Cube</button>
-          <button id="spawn-sphere" class="spawn-btn">Sphere</button>
-          <button id="spawn-ragdoll" class="spawn-btn">Ragdoll</button>
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="props">Props</button>
+          <button class="tab-btn" data-tab="vehicles">Vehicles</button>
         </div>
-        <p class="instructions">Hold 'Q' to keep menu open. Release to close.</p>
-        <p class="instructions">Left Click to grab with Physics Gun. Scroll to move closer/further. Arrow keys to rotate.</p>
+
+        <div id="tab-props" class="tab-content active">
+          <div class="grid">
+            <button id="spawn-cube" class="spawn-btn">Cube</button>
+            <button id="spawn-sphere" class="spawn-btn">Sphere</button>
+            <button id="spawn-cylinder" class="spawn-btn">Cylinder</button>
+            <button id="spawn-cone" class="spawn-btn">Cone</button>
+            <button id="spawn-ragdoll" class="spawn-btn" style="grid-column: span 2;">Ragdoll</button>
+          </div>
+        </div>
+
+        <div id="tab-vehicles" class="tab-content">
+          <div class="grid">
+            <button id="spawn-car" class="spawn-btn" style="grid-column: span 2;">Car (Beta)</button>
+          </div>
+        </div>
+
+        <div class="instructions-panel">
+            <p><strong>Controls:</strong> WASD to move. Space to jump. Shift to sprint. Ctrl to crouch.</p>
+            <p>Hold 'Q' to open menu.</p>
+            <p><strong>Tools:</strong> Press 1: PhysGun, 2: Weld Tool, 3: Thruster Tool.</p>
+            <p><strong>PhysGun:</strong> Left Click to grab. Scroll to move closer/further. Hold 'E' and use Arrow keys to rotate.</p>
+            <p><strong>Thruster:</strong> Left Click to place. Hold 'T' or 'Numpad8' to activate.</p>
+            <p><strong>Weld:</strong> Click two objects to weld them together.</p>
+        </div>
       </div>
     </div>
     <div id="crosshair">+</div>

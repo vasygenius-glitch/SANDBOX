@@ -17,3 +17,27 @@
 7:08:54 AM [vite] (client) page reload src/PhysicsGun.js
 7:09:11 AM [vite] (client) page reload src/PlayerController.js
 7:09:45 AM [vite] (client) page reload src/Ragdoll.js
+7:30:02 AM [vite] (client) page reload src/PhysicsGun.js
+7:30:29 AM [vite] (client) page reload index.html
+7:30:30 AM [vite] (client) page reload src/main.js
+7:30:56 AM [vite] (client) page reload src/Ragdoll.js
+7:31:32 AM [vite] (client) page reload src/main.js
+7:31:33 AM [vite] (client) page reload src/PlayerController.js
+7:35:32 AM [vite] (client) page reload src/PlayerController.js
+7:36:09 AM [vite] (client) page reload src/Ragdoll.js
+7:40:56 AM [vite] (client) page reload src/main.js
+7:41:58 AM [vite] (client) page reload src/PhysicsGun.js
+7:42:20 AM [vite] (client) page reload src/main.js
+7:42:21 AM [vite] (client) page reload index.html
+7:42:26 AM [vite] (client) page reload src/main.js
+7:42:27 AM [vite] (client) page reload src/PhysicsGun.js
+7:42:32 AM [vite] (client) page reload src/PhysicsGun.js
+7:43:01 AM [vite] (client) page reload src/PlayerController.js
+7:43:18 AM [vite] (client) page reload src/main.js
+7:44:18 AM [vite] (client) page reload src/main.js
+7:45:05 AM [vite] (client) page reload index.html
+7:45:06 AM [vite] (client) hmr update /src/style.css
+7:45:22 AM [vite] (client) page reload src/main.js
+7:46:04 AM [vite] (client) page reload src/main.js
+7:47:08 AM [vite] (client) ✨ new dependencies optimized: three/examples/jsm/postprocessing/EffectComposer.js, three/examples/jsm/postprocessing/RenderPass.js, three/examples/jsm/postprocessing/UnrealBloomPass.js
+7:47:08 AM [vite] (client) ✨ optimized dependencies changed. reloading

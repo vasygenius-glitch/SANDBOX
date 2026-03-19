@@ -42,9 +42,13 @@ export class Ragdoll {
         return joint;
     }
 
-    createRevoluteJoint(parent, child, anchor1, anchor2, axis) {
+    createRevoluteJoint(parent, child, anchor1, anchor2, axis1, axis2, limits) {
         // Hinge joint (e.g., elbows, knees)
-        const jointData = RAPIER.JointData.revolute(anchor1, anchor2, axis);
+        const jointData = RAPIER.JointData.revolute(anchor1, anchor2, axis1, axis2);
+        if (limits) {
+            jointData.limitsEnabled = true;
+            jointData.limits = limits; // [min, max] in radians
+        }
         const joint = this.world.createImpulseJoint(jointData, parent, child, true);
         this.joints.push(joint);
         return joint;
@@ -83,17 +87,21 @@ export class Ragdoll {
         this.createSphericalJoint(torso, rightArmUpper, { x: 0.35, y: 0.4, z: 0 }, { x: 0, y: 0.25, z: 0 });
 
         // Elbows (Revolute/Hinge - bends along X axis)
-        const elbowAxis = { x: 1.0, y: 0.0, z: 0.0 };
-        this.createRevoluteJoint(leftArmUpper, leftArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis);
-        this.createRevoluteJoint(rightArmUpper, rightArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis);
+        const elbowAxis1 = { x: 1.0, y: 0.0, z: 0.0 };
+        const elbowAxis2 = { x: 1.0, y: 0.0, z: 0.0 };
+        // Limit elbow to only bend inward (0 to ~160 degrees)
+        this.createRevoluteJoint(leftArmUpper, leftArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis1, elbowAxis2, [-2.8, 0]);
+        this.createRevoluteJoint(rightArmUpper, rightArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis1, elbowAxis2, [-2.8, 0]);
 
         // Hips to Torso (Spherical)
         this.createSphericalJoint(torso, leftLegUpper, { x: -0.15, y: -0.55, z: 0 }, { x: 0, y: 0.3, z: 0 });
         this.createSphericalJoint(torso, rightLegUpper, { x: 0.15, y: -0.55, z: 0 }, { x: 0, y: 0.3, z: 0 });
 
         // Knees (Revolute/Hinge - bends along X axis)
-        const kneeAxis = { x: 1.0, y: 0.0, z: 0.0 };
-        this.createRevoluteJoint(leftLegUpper, leftLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis);
-        this.createRevoluteJoint(rightLegUpper, rightLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis);
+        const kneeAxis1 = { x: 1.0, y: 0.0, z: 0.0 };
+        const kneeAxis2 = { x: 1.0, y: 0.0, z: 0.0 };
+        // Limit knee to only bend backward (0 to ~160 degrees)
+        this.createRevoluteJoint(leftLegUpper, leftLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis1, kneeAxis2, [0, 2.8]);
+        this.createRevoluteJoint(rightLegUpper, rightLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis1, kneeAxis2, [0, 2.8]);
     }
 }
