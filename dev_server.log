@@ -1,0 +1,11 @@
+
+> sandbox-game@0.0.0 dev
+> vite
+
+
+  VITE v8.0.1  ready in 304 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+6:01:10 AM [vite] (client) page reload src/main.js
+6:01:38 AM [vite] (client) page reload src/main.js
