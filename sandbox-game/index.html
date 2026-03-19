@@ -6,6 +6,19 @@
     <title>Sandbox Game</title>
   </head>
   <body>
+    <div id="q-menu" class="hidden">
+      <div class="menu-container">
+        <h2>Spawn Menu</h2>
+        <div class="grid">
+          <button id="spawn-cube" class="spawn-btn">Cube</button>
+          <button id="spawn-sphere" class="spawn-btn">Sphere</button>
+          <button id="spawn-ragdoll" class="spawn-btn">Ragdoll</button>
+        </div>
+        <p class="instructions">Hold 'Q' to keep menu open. Release to close.</p>
+        <p class="instructions">Left Click to grab with Physics Gun. Scroll to move closer/further. Arrow keys to rotate.</p>
+      </div>
+    </div>
+    <div id="crosshair">+</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

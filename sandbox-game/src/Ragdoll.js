@@ -20,7 +20,10 @@ export class Ragdoll {
         mesh.receiveShadow = true;
         this.scene.add(mesh);
 
-        const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+        // Enable CCD to stop ragdoll parts phasing through walls/floor
+        const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(pos.x, pos.y, pos.z)
+            .setCcdEnabled(true);
         const body = this.world.createRigidBody(bodyDesc);
 
         const colliderDesc = RAPIER.ColliderDesc.cuboid(width / 2, height / 2, depth / 2).setMass(mass);
@@ -31,9 +34,17 @@ export class Ragdoll {
         return body;
     }
 
-    createJoint(parent, child, anchor1, anchor2) {
-        // limit the joints slightly so the ragdoll isn't completely spaghetti
+    createSphericalJoint(parent, child, anchor1, anchor2) {
+        // Ball-and-Socket Joint (e.g., shoulders, hips)
         const jointData = RAPIER.JointData.spherical(anchor1, anchor2);
+        const joint = this.world.createImpulseJoint(jointData, parent, child, true);
+        this.joints.push(joint);
+        return joint;
+    }
+
+    createRevoluteJoint(parent, child, anchor1, anchor2, axis) {
+        // Hinge joint (e.g., elbows, knees)
+        const jointData = RAPIER.JointData.revolute(anchor1, anchor2, axis);
         const joint = this.world.createImpulseJoint(jointData, parent, child, true);
         this.joints.push(joint);
         return joint;
@@ -43,30 +54,46 @@ export class Ragdoll {
         const hOffset = pos.y; // base spawn height
 
         // 1. Torso
-        const torso = this.createLimb(0.6, 1.0, 0.4, 10.0, { x: pos.x, y: hOffset + 1.5, z: pos.z });
+        const torso = this.createLimb(0.6, 1.0, 0.4, 15.0, { x: pos.x, y: hOffset + 2.0, z: pos.z });
 
         // 2. Head
-        const head = this.createLimb(0.4, 0.4, 0.4, 3.0, { x: pos.x, y: hOffset + 2.3, z: pos.z });
+        const head = this.createLimb(0.4, 0.4, 0.4, 4.0, { x: pos.x, y: hOffset + 2.8, z: pos.z });
 
-        // 3. Arms
-        const leftArm = this.createLimb(0.2, 0.8, 0.2, 2.0, { x: pos.x - 0.5, y: hOffset + 1.5, z: pos.z });
-        const rightArm = this.createLimb(0.2, 0.8, 0.2, 2.0, { x: pos.x + 0.5, y: hOffset + 1.5, z: pos.z });
+        // 3. Arms (Upper and Lower)
+        const leftArmUpper = this.createLimb(0.2, 0.5, 0.2, 2.0, { x: pos.x - 0.5, y: hOffset + 2.2, z: pos.z });
+        const leftArmLower = this.createLimb(0.18, 0.5, 0.18, 1.5, { x: pos.x - 0.5, y: hOffset + 1.6, z: pos.z });
 
-        // 4. Legs
-        const leftLeg = this.createLimb(0.25, 1.0, 0.25, 4.0, { x: pos.x - 0.2, y: hOffset + 0.5, z: pos.z });
-        const rightLeg = this.createLimb(0.25, 1.0, 0.25, 4.0, { x: pos.x + 0.2, y: hOffset + 0.5, z: pos.z });
+        const rightArmUpper = this.createLimb(0.2, 0.5, 0.2, 2.0, { x: pos.x + 0.5, y: hOffset + 2.2, z: pos.z });
+        const rightArmLower = this.createLimb(0.18, 0.5, 0.18, 1.5, { x: pos.x + 0.5, y: hOffset + 1.6, z: pos.z });
+
+        // 4. Legs (Upper and Lower)
+        const leftLegUpper = this.createLimb(0.25, 0.6, 0.25, 4.0, { x: pos.x - 0.2, y: hOffset + 1.2, z: pos.z });
+        const leftLegLower = this.createLimb(0.2, 0.6, 0.2, 3.0, { x: pos.x - 0.2, y: hOffset + 0.5, z: pos.z });
+
+        const rightLegUpper = this.createLimb(0.25, 0.6, 0.25, 4.0, { x: pos.x + 0.2, y: hOffset + 1.2, z: pos.z });
+        const rightLegLower = this.createLimb(0.2, 0.6, 0.2, 3.0, { x: pos.x + 0.2, y: hOffset + 0.5, z: pos.z });
 
         // Link them with joints
 
-        // Head to Torso
-        this.createJoint(torso, head, { x: 0, y: 0.5, z: 0 }, { x: 0, y: -0.2, z: 0 });
+        // Head to Torso (Spherical - Neck)
+        this.createSphericalJoint(torso, head, { x: 0, y: 0.55, z: 0 }, { x: 0, y: -0.25, z: 0 });
 
-        // Arms to Torso
-        this.createJoint(torso, leftArm, { x: -0.3, y: 0.4, z: 0 }, { x: 0, y: 0.4, z: 0 });
-        this.createJoint(torso, rightArm, { x: 0.3, y: 0.4, z: 0 }, { x: 0, y: 0.4, z: 0 });
+        // Shoulders to Torso (Spherical)
+        this.createSphericalJoint(torso, leftArmUpper, { x: -0.35, y: 0.4, z: 0 }, { x: 0, y: 0.25, z: 0 });
+        this.createSphericalJoint(torso, rightArmUpper, { x: 0.35, y: 0.4, z: 0 }, { x: 0, y: 0.25, z: 0 });
 
-        // Legs to Torso
-        this.createJoint(torso, leftLeg, { x: -0.15, y: -0.5, z: 0 }, { x: 0, y: 0.5, z: 0 });
-        this.createJoint(torso, rightLeg, { x: 0.15, y: -0.5, z: 0 }, { x: 0, y: 0.5, z: 0 });
+        // Elbows (Revolute/Hinge - bends along X axis)
+        const elbowAxis = { x: 1.0, y: 0.0, z: 0.0 };
+        this.createRevoluteJoint(leftArmUpper, leftArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis);
+        this.createRevoluteJoint(rightArmUpper, rightArmLower, { x: 0, y: -0.25, z: 0 }, { x: 0, y: 0.25, z: 0 }, elbowAxis);
+
+        // Hips to Torso (Spherical)
+        this.createSphericalJoint(torso, leftLegUpper, { x: -0.15, y: -0.55, z: 0 }, { x: 0, y: 0.3, z: 0 });
+        this.createSphericalJoint(torso, rightLegUpper, { x: 0.15, y: -0.55, z: 0 }, { x: 0, y: 0.3, z: 0 });
+
+        // Knees (Revolute/Hinge - bends along X axis)
+        const kneeAxis = { x: 1.0, y: 0.0, z: 0.0 };
+        this.createRevoluteJoint(leftLegUpper, leftLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis);
+        this.createRevoluteJoint(rightLegUpper, rightLegLower, { x: 0, y: -0.3, z: 0 }, { x: 0, y: 0.3, z: 0 }, kneeAxis);
     }
 }

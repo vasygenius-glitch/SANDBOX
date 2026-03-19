@@ -18,11 +18,51 @@ export class PhysicsGun {
         const kinematicDesc = RAPIER.RigidBodyDesc.kinematicPositionBased();
         this.kinematicBody = this.world.createRigidBody(kinematicDesc);
         this.grabDistance = 3.0;
+        this.minGrabDistance = 1.0;
+        this.maxGrabDistance = 15.0;
+
+        // Rotation controls
+        this.isRotating = false;
+        this.rotateSpeed = 0.05;
+        this.targetRotation = new THREE.Quaternion();
 
         this.initEventListeners();
     }
 
     initEventListeners() {
+        document.addEventListener('wheel', (event) => {
+            if (this.grabbedObject) {
+                // Adjust grab distance based on scroll wheel
+                const scrollDir = Math.sign(event.deltaY);
+                this.grabDistance -= scrollDir * 0.5;
+                this.grabDistance = Math.max(this.minGrabDistance, Math.min(this.maxGrabDistance, this.grabDistance));
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyE' && this.grabbedObject) {
+                this.isRotating = true;
+            }
+            if (this.isRotating) {
+                const rotAxis = new THREE.Vector3();
+                if (event.code === 'ArrowLeft') rotAxis.set(0, 1, 0); // yaw
+                if (event.code === 'ArrowRight') rotAxis.set(0, -1, 0);
+                if (event.code === 'ArrowUp') rotAxis.set(1, 0, 0); // pitch
+                if (event.code === 'ArrowDown') rotAxis.set(-1, 0, 0);
+
+                if (rotAxis.lengthSq() > 0) {
+                    const q = new THREE.Quaternion().setFromAxisAngle(rotAxis, this.rotateSpeed);
+                    this.targetRotation.premultiply(q);
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            if (event.code === 'KeyE') {
+                this.isRotating = false;
+            }
+        });
+
         document.addEventListener('mousedown', (event) => {
             if (event.button === 0 && document.pointerLockElement) {
                 this.tryGrab();
@@ -67,8 +107,16 @@ export class PhysicsGun {
                     z: grabPoint.z - objPos.z
                 };
 
-                // Use Fixed or Spherical joint
-                const jointData = RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, anchorOnBody);
+                // Store initial rotation of the grabbed object
+                const initialRot = hitObject.body.rotation();
+                this.targetRotation.set(initialRot.x, initialRot.y, initialRot.z, initialRot.w);
+                this.kinematicBody.setRotation(this.targetRotation, true);
+
+                // Use FixedJoint so we can control rotation directly
+                const jointData = RAPIER.JointData.fixed(
+                    { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 },
+                    anchorOnBody, { x: 0, y: 0, z: 0, w: 1 }
+                );
                 this.joint = this.world.createImpulseJoint(jointData, this.kinematicBody, hitObject.body, true);
 
                 hitObject.body.wakeUp();
@@ -107,6 +155,10 @@ export class PhysicsGun {
             };
 
             this.kinematicBody.setTranslation(smoothedPos, true);
+
+            // Apply rotation (slerp would be better, but instant set works for rigid grab)
+            this.kinematicBody.setRotation(this.targetRotation, true);
+
             this.grabbedObject.body.wakeUp();
         }
     }

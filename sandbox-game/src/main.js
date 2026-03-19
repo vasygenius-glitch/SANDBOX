@@ -48,8 +48,15 @@ directionalLight.shadow.camera.bottom = -20;
 scene.add(directionalLight);
 
 // Ground
-const groundGeometry = new THREE.PlaneGeometry(100, 100);
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8, metalness: 0.2 });
+const groundGeometry = new THREE.PlaneGeometry(500, 500); // Expanded map
+// We add a basic grid texture to give scale to the map
+const gridTexture = new THREE.GridHelper(500, 100, 0x000000, 0x000000);
+gridTexture.position.y = 0.01; // slightly above ground to prevent z-fighting
+gridTexture.material.opacity = 0.2;
+gridTexture.material.transparent = true;
+scene.add(gridTexture);
+
+const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x5a7a5a, roughness: 0.9, metalness: 0.1 }); // grass-ish color
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -58,23 +65,30 @@ scene.add(ground);
 // Ground Physics
 const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0);
 const groundBody = world.createRigidBody(groundBodyDesc);
-const groundColliderDesc = RAPIER.ColliderDesc.cuboid(50, 0.1, 50);
+const groundColliderDesc = RAPIER.ColliderDesc.cuboid(250, 0.1, 250); // Match expanded size
 world.createCollider(groundColliderDesc, groundBody);
 
-// Test Cube (Dynamic)
-const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-cube.castShadow = true;
-cube.receiveShadow = true;
-scene.add(cube);
+// Buildings (Static environment)
+function createBuilding(w, h, d, x, y, z, color) {
+    const geometry = new THREE.BoxGeometry(w, h, d);
+    const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
 
-const cubeBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 5, -5);
-const cubeBody = world.createRigidBody(cubeBodyDesc);
-const cubeColliderDesc = RAPIER.ColliderDesc.cuboid(1, 1, 1);
-world.createCollider(cubeColliderDesc, cubeBody);
+    const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z);
+    const body = world.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(w/2, h/2, d/2);
+    world.createCollider(colliderDesc, body);
+}
 
-dynamicObjects.push({ mesh: cube, body: cubeBody });
+// Add some walls / simple buildings around the starting area
+createBuilding(20, 10, 2, 0, 5, -20, 0x888888); // back wall
+createBuilding(2, 10, 20, -10, 5, -10, 0x888888); // left wall
+createBuilding(10, 5, 10, 15, 2.5, -15, 0xaa5555); // red building block
+createBuilding(5, 15, 5, -20, 7.5, 10, 0x5555aa); // blue tower
 
 // Player Physics
 const playerBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 2, 5); // Start as kinematic, can change to dynamic later
@@ -94,57 +108,78 @@ playerController.setPhysicsBody(playerBody, world);
 // Physics Gun
 const physicsGun = new PhysicsGun(camera, scene, world, dynamicObjects);
 
-// Spawn Objects (Key E)
-window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyE') {
-        const shapeType = Math.random() > 0.5 ? 'box' : 'sphere';
-        const color = Math.random() * 0xffffff;
-        let mesh, colliderDesc;
+// Helper to get spawn position in front of camera
+function getSpawnPosition(distance = 4) {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    // Ignore pitch, spawn roughly level with the player
+    dir.y = 0;
+    dir.normalize();
 
-        if (shapeType === 'box') {
-            const size = 0.5 + Math.random() * 1;
-            mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(size * 2, size * 2, size * 2),
-                new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
-            );
-            colliderDesc = RAPIER.ColliderDesc.cuboid(size, size, size);
-        } else {
-            const radius = 0.5 + Math.random() * 0.5;
-            mesh = new THREE.Mesh(
-                new THREE.SphereGeometry(radius, 32, 32),
-                new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
-            );
-            colliderDesc = RAPIER.ColliderDesc.ball(radius);
-        }
+    // Default spawn slightly above ground
+    const spawnPos = camera.position.clone().add(dir.multiplyScalar(distance));
+    spawnPos.y = Math.max(camera.position.y, 2.0);
+    return spawnPos;
+}
 
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        scene.add(mesh);
+// Q-Menu Spawn Logic
+document.getElementById('spawn-cube').addEventListener('click', () => {
+    const size = 0.5 + Math.random() * 1;
+    const color = Math.random() * 0xffffff;
 
-        // Spawn in front of camera
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        const spawnPos = camera.position.clone().add(dir.multiplyScalar(3));
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(size * 2, size * 2, size * 2),
+        new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
 
-        const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(spawnPos.x, spawnPos.y, spawnPos.z);
-        const body = world.createRigidBody(bodyDesc);
-        world.createCollider(colliderDesc, body);
+    const spawnPos = getSpawnPosition();
+    // Enable Continuous Collision Detection (CCD) to prevent clipping at high speeds
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
+        .setCcdEnabled(true);
 
-        dynamicObjects.push({ mesh, body });
-    }
+    const body = world.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(size, size, size).setMass(size * 10);
+    world.createCollider(colliderDesc, body);
 
-    if (event.code === 'KeyR') {
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        const spawnPos = camera.position.clone().add(dir.multiplyScalar(4));
-        spawnPos.y += 2; // Spawn a bit higher
+    dynamicObjects.push({ mesh, body });
+});
 
-        const ragdoll = new Ragdoll(scene, world, spawnPos);
-        // add all ragdoll limbs to dynamic objects so they get rendered
-        ragdoll.bodies.forEach(b => {
-            dynamicObjects.push(b);
-        });
-    }
+document.getElementById('spawn-sphere').addEventListener('click', () => {
+    const radius = 0.5 + Math.random() * 0.5;
+    const color = Math.random() * 0xffffff;
+
+    const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 32, 32),
+        new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 })
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const spawnPos = getSpawnPosition();
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
+        .setCcdEnabled(true);
+
+    const body = world.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.ball(radius).setMass(radius * 10);
+    world.createCollider(colliderDesc, body);
+
+    dynamicObjects.push({ mesh, body });
+});
+
+document.getElementById('spawn-ragdoll').addEventListener('click', () => {
+    const spawnPos = getSpawnPosition(5);
+    spawnPos.y += 2; // Spawn high up to see it fall
+
+    const ragdoll = new Ragdoll(scene, world, spawnPos);
+    ragdoll.bodies.forEach(b => {
+        dynamicObjects.push(b);
+    });
 });
 
 // Resize handler

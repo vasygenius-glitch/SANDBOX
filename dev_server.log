@@ -9,3 +9,11 @@
   ➜  Network: use --host to expose
 6:01:10 AM [vite] (client) page reload src/main.js
 6:01:38 AM [vite] (client) page reload src/main.js
+7:07:29 AM [vite] (client) page reload index.html
+7:07:29 AM [vite] (client) hmr update /src/style.css
+7:07:51 AM [vite] (client) page reload src/main.js
+7:08:21 AM [vite] (client) page reload src/PlayerController.js
+7:08:22 AM [vite] (client) page reload src/main.js
+7:08:54 AM [vite] (client) page reload src/PhysicsGun.js
+7:09:11 AM [vite] (client) page reload src/PlayerController.js
+7:09:45 AM [vite] (client) page reload src/Ragdoll.js

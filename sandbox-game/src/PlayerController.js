@@ -25,13 +25,20 @@ export class PlayerController {
 
     initEventListeners() {
         document.addEventListener('click', () => {
-            if (!this.controls.isLocked) {
+            // Only lock if the Q-menu isn't open (i.e. 'Q' is not held down)
+            if (!this.controls.isLocked && !this.qMenuOpen) {
                 this.controls.lock();
             }
         });
 
+        this.qMenuOpen = false;
+        const qMenu = document.getElementById('q-menu');
+
         const onKeyDown = (event) => {
             switch (event.code) {
+                case 'KeyE':
+                    this.isRotatingObject = true;
+                    break;
                 case 'ArrowUp':
                 case 'KeyW':
                     this.moveForward = true;
@@ -48,11 +55,21 @@ export class PlayerController {
                 case 'KeyD':
                     this.moveRight = true;
                     break;
+                case 'KeyQ':
+                    if (!this.qMenuOpen) {
+                        this.qMenuOpen = true;
+                        qMenu.classList.remove('hidden');
+                        document.exitPointerLock();
+                    }
+                    break;
             }
         };
 
         const onKeyUp = (event) => {
             switch (event.code) {
+                case 'KeyE':
+                    this.isRotatingObject = false;
+                    break;
                 case 'ArrowUp':
                 case 'KeyW':
                     this.moveForward = false;
@@ -68,6 +85,12 @@ export class PlayerController {
                 case 'ArrowRight':
                 case 'KeyD':
                     this.moveRight = false;
+                    break;
+                case 'KeyQ':
+                    this.qMenuOpen = false;
+                    qMenu.classList.add('hidden');
+                    // auto re-lock pointer when menu closes
+                    this.controls.lock();
                     break;
             }
         };
@@ -91,6 +114,13 @@ export class PlayerController {
 
         const cameraRight = new THREE.Vector3();
         cameraRight.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0)).normalize();
+
+        // Disable PointerLock controls mouse look if we are rotating an object
+        if (this.isRotatingObject) {
+            this.controls.isLocked = false;
+        } else if (document.pointerLockElement === this.controls.domElement) {
+            this.controls.isLocked = true;
+        }
 
         const moveVector = new THREE.Vector3();
         moveVector.addScaledVector(cameraDirection, this.direction.z);
