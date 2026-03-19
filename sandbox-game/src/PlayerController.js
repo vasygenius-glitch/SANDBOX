@@ -132,12 +132,6 @@ export class PlayerController {
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
 
-        // Override PointerLockControls mousemove to stop looking around while E is held
-        const originalOnMouseMove = this.controls.onMouseMove.bind(this.controls);
-        this.controls.onMouseMove = (event) => {
-            if (this.isRotatingObject) return;
-            originalOnMouseMove(event);
-        };
     }
 
     jump() {

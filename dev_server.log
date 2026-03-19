@@ -41,3 +41,4 @@
 7:46:04 AM [vite] (client) page reload src/main.js
 7:47:08 AM [vite] (client) ✨ new dependencies optimized: three/examples/jsm/postprocessing/EffectComposer.js, three/examples/jsm/postprocessing/RenderPass.js, three/examples/jsm/postprocessing/UnrealBloomPass.js
 7:47:08 AM [vite] (client) ✨ optimized dependencies changed. reloading
+8:04:44 PM [vite] (client) page reload src/PlayerController.js
